@@ -100,15 +100,15 @@ contract Vesting is Ownable, ReentrancyGuard {
         require(_duration >= _cliff, "TokenVesting: duration must be >= cliff");
 
         bytes32 vestingScheduleId = computeNextVestingScheduleIdForHolder(_beneficiary);
-        uint256 cliff = _start + _cliff;
+        uint256 cliff = _start.add(_cliff);
 
         vestingSchedules[vestingScheduleId] =
             VestingSchedule(_beneficiary, cliff, _start, _duration, _slicePeriodSeconds, _revocable, _amount, 0, false);
 
-        vestingSchedulesTotalAmount = vestingSchedulesTotalAmount + _amount;
+        vestingSchedulesTotalAmount = vestingSchedulesTotalAmount.add(_amount);
         vestingScheduleIds.push(vestingScheduleId);
         uint256 currentVestingCount = holdersVestingCount[_beneficiary];
-        holdersVestingCount[_beneficiary] = currentVestingCount + 1;
+        holdersVestingCount[_beneficiary] = currentVestingCount.add(1);
     }
 
     /**
@@ -125,8 +125,8 @@ contract Vesting is Ownable, ReentrancyGuard {
         if (vestedAmount > 0) {
             release(vestingScheduleId, vestedAmount);
         }
-        uint256 unreleased = vestingSchedule.amountTotal - vestingSchedule.released;
-        vestingSchedulesTotalAmount = vestingSchedulesTotalAmount - unreleased;
+        uint256 unreleased = vestingSchedule.amountTotal.sub(vestingSchedule.released);
+        vestingSchedulesTotalAmount = vestingSchedulesTotalAmount.sub(unreleased);
         vestingSchedule.revoked = true;
     }
 
@@ -159,11 +159,11 @@ contract Vesting is Ownable, ReentrancyGuard {
         require(vestedAmount >= amount, "TokenVesting: cannot release tokens, not enough vested tokens");
 
         // Add ammount to the amount released
-        vestingSchedule.released = vestingSchedule.released + amount;
+        vestingSchedule.released = vestingSchedule.released.add(amount);
         address payable beneficiaryPayable = payable(vestingSchedule.beneficiary);
 
         // Deduct from the total vested amount
-        vestingSchedulesTotalAmount = vestingSchedulesTotalAmount - amount;
+        vestingSchedulesTotalAmount = vestingSchedulesTotalAmount.sub(amount);
         // Transfer Amount to the user
         _token.safeTransfer(beneficiaryPayable, amount);
     }
@@ -233,7 +233,7 @@ contract Vesting is Ownable, ReentrancyGuard {
      * @return the amount of tokens
      */
     function getWithdrawableAmount() public view returns (uint256) {
-        return _token.balanceOf(address(this)) - vestingSchedulesTotalAmount;
+        return _token.balanceOf(address(this)).sub(vestingSchedulesTotalAmount);
     }
 
     /**
@@ -263,19 +263,19 @@ contract Vesting is Ownable, ReentrancyGuard {
             return 0;
         }
         // If the current time is after the cliff and the vesting duration
-        else if (currentTime >= vestingSchedule.cliff + vestingSchedule.duration) {
-            return vestingSchedule.amountTotal - vestingSchedule.released;
+        else if (currentTime >= vestingSchedule.cliff.add(vestingSchedule.duration)) {
+            return vestingSchedule.amountTotal.sub(vestingSchedule.released);
         } else {
             // compute the number of ful vesting periods that have elasped
-            uint256 timeFromStart = currentTime - vestingSchedule.cliff;
+            uint256 timeFromStart = currentTime.sub(vestingSchedule.cliff);
             uint256 secondsPerSlice = vestingSchedule.slicePeriodSeconds;
-            uint256 vestedSlicedPeriods = timeFromStart / secondsPerSlice;
-            uint256 vestedSeconds = vestedSlicedPeriods * secondsPerSlice;
+            uint256 vestedSlicedPeriods = timeFromStart.div(secondsPerSlice);
+            uint256 vestedSeconds = vestedSlicedPeriods.mul(secondsPerSlice);
 
             // COmpute the amount of tokens that are vested
-            uint256 vestedAmount = (vestingSchedule.amountTotal * vestedSeconds) / vestingSchedule.duration;
+            uint256 vestedAmount = vestingSchedule.amountTotal.mul(vestedSeconds).div(vestingSchedule.duration);
             // subtract the amount already released and return
-            return vestedAmount - vestingSchedule.released;
+            return vestedAmount.sub(vestingSchedule.released);
         }
     }
 
