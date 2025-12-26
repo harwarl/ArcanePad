@@ -57,18 +57,20 @@ interface IPool {
     /**
      * @notice Initialize the pool with configuration
      * @dev Can only be called once, by factory
-     * @param poolConfig Pool configuration struct
-     * @param vestingConfig Vesting configuration struct
+     * @param _poolConfig Pool configuration struct
+     * @param _vestingConfig Vesting configuration struct
      * @param _whitelistRoot Merkle root for whitelist
+     * @param _whitelistEnabled tag to check whitelist
      * @param _creator Pool creator address
      * @param _stakingTiers Staking tiers contract address
      * @param _feeCollector Fee collector address
      * @param _platformFeeBps Platform fee in basis points
      */
     function initialize(
-        DataTypes.PoolConfig calldata poolConfig,
-        DataTypes.VestingConfig calldata vestingConfig,
+        DataTypes.PoolConfig calldata _poolConfig,
+        DataTypes.VestingConfig calldata _vestingConfig,
         bytes32 _whitelistRoot,
+        bool _whitelistEnabled,
         address _creator,
         address _stakingTiers,
         address _feeCollector,
@@ -198,7 +200,7 @@ interface IPool {
      * @notice Update whitelist merkle root
      * @param newMerkleRoot New Merkle roor for whitelist
      */
-    function updateWhiteliste(bytes32 newMerkleRoot) external;
+    function updateWhitelist(bytes32 newMerkleRoot) external;
 
     /**
      * @notice Set tier allocation

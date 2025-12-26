@@ -189,11 +189,11 @@ contract IDOPool is IPool, Pausable, ReentrancyGuard {
 
     /**
      * @notice Calculate the token user would receive for an amount
-     * @param paymentTokenAmmount Amount of payment token
+     * @param paymentTokenAmount Amount of payment token
      * @return Amount of tokens to be allocated
      */
-    function calculateTokenAllocation(uint256 paymentTokenAmmount) external view returns (uint256) {
-        _calculateTokenAllocation(paymentTokenAmmount);
+    function calculateTokenAllocation(uint256 paymentTokenAmount) external view returns (uint256) {
+       return _calculateTokenAllocation(paymentTokenAmount);
     }
 
     /**
@@ -201,7 +201,7 @@ contract IDOPool is IPool, Pausable, ReentrancyGuard {
      * @param user Address of the user
      * @return Tier Level (0-5)
      */
-    function getUserTier(address user) external view returns (uint8) {
+    function getUserTier(address user) external view returns (uint8){
         return 2;
     }
 
@@ -211,7 +211,7 @@ contract IDOPool is IPool, Pausable, ReentrancyGuard {
      * @param merkleProof Merkle Proof for verification
      */
     function isWhitelisted(address user, bytes32[] calldata merkleProof) external view returns (bool) {
-        _verifyWhitelist(user, merkleProof);
+        return _verifyWhitelist(user, merkleProof);
     }
 
     /**
@@ -337,7 +337,7 @@ contract IDOPool is IPool, Pausable, ReentrancyGuard {
      * @param paymentAmount Purchase Token amount
      * @return Amount of token allocated
      */
-    function _calculateTokenAllocation(uint256 paymentAmount) internal returns (uint256) {
+    function _calculateTokenAllocation(uint256 paymentAmount) internal view returns (uint256) {
         // get Token decimals
         uint256 paymentDecimals = IERC20Metadata(poolInfo.paymentToken).decimals();
         uint256 tokenDecimals = IERC20Metadata(poolInfo.token).decimals();
