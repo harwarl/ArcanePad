@@ -2,9 +2,31 @@
 pragma solidity ^0.8.16;
 
 import "./interfaces/IPool.sol";
+import "./library/DataTypes.sol";
 import "@openzeppelin/contracts/security/Pausable.sol";
 
 contract IDOPool is IPool, Pausable {
+    /**
+     * @notice Initialize the pool with configuration
+     * @dev Can only be called once, by factory
+     * @param poolConfig Pool configuration struct
+     * @param vestingConfig Vesting configuration struct
+     * @param _whitelistRoot Merkle root for whitelist
+     * @param _creator Pool creator address
+     * @param _stakingTiers Staking tiers contract address
+     * @param _feeCollector Fee collector address
+     * @param _platformFeeBps Platform fee in basis points
+     */
+    function initialize(
+        DataTypes.PoolConfig calldata poolConfig,
+        DataTypes.VestingConfig calldata vestingConfig,
+        bytes32 _whitelistRoot,
+        address _creator,
+        address _stakingTiers,
+        address _feeCollector,
+        uint256 _platformFeeBps
+    ) external {}
+
     /**
      * @notice Participate in the IDO sale
      * @param amount Amount of the payment token to contribute

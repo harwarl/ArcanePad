@@ -1,25 +1,23 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.16;
+
+import "../library/DataTypes.sol";
+
+
 /**
  * @title IDOPool
  * @notice Individual IDO pool contrcat for token sales
  */
 interface IPool {
     // ========================================= STATE VARIABLES =========================================
+    // IDO Factory Address
     // address public factory;
-    // address public creator;
-    // address public token; // Token being sold
-    // address public paymentToken; // USDT,, USDC
-    // uint256 public tokenPrice;
-    // uint256 public softCap;
-    // uint256 public hardCap;
-    // uint256 public minContribution;
-    // uint256 public maxContribution;
-    // uint256 public startTime;
-    // uint256 public endTime;
-    // uint256 public totalRaised;
-    // uint256 public totalParticipants;
-    // bool public finalized;
-    // bool public whitelistEnabled;
+    // IDO creator Address
+    // address public creator
+    // WhitelistMerkleRoot
     // bytes32 public whitelistMerkleRoot;
+    // // Current Pool status
+    // PoolStatus public status;
 
     // // Mappings
     // mapping(address => uint256) public contributions;
@@ -43,7 +41,6 @@ interface IPool {
         Silver, // Tier 2
         Gold, // Tier 3
         Diamond // Tier 4
-
     }
 
     // ======================== EVENTS ========================
@@ -56,52 +53,30 @@ interface IPool {
     event EmergencyWithdraw(address token, uint256 amount, address to);
 
     // ======================== STRUCTS ========================
-    struct PoolInfo {
-        // address of the token to be bought
-        address token;
-        // address of the payment token
-        address paymentToken;
-        // Price in payment token
-        uint256 tokenPrice;
-        // Minimum raise target
-        uint256 softCap;
-        // Maximum raise target
-        uint256 hardCap;
-        // Min amount per wallet
-        uint256 minContribution;
-        // Max amount per wallet
-        uint256 maxContribution;
-        // sale start timestamp
-        uint256 startTime;
-        // sale end timestamp
-        uint256 endTime;
-        // total amount raised for the project
-        uint256 totalRaised;
-        // total wallets involved in sale
-        uint256 totalParticipants;
-        // true is project is completed, false if its not
-        bool finalized;
-        // true is project is cancelled, false if not
-        bool cancelled;
-        PoolStatus status;
-    }
-
-    struct UserInfo {
-        // total payment token contributed
-        uint256 contribution;
-        // total allocation of token to user
-        uint256 totalAllocation;
-        //true is wallet has claimed the refund
-        bool hasClaimedRefund;
-        // true if wallet has claimed the token
-        bool hasClaimedTokens;
-        // user tier
-        uint8 tier;
-        // guaranteed allocation is tier is valid
-        uint256 guaranteedAllocation;
-    }
+    
 
     // ======================== CORE FUNCTIONS ========================
+    /**
+     * @notice Initialize the pool with configuration
+     * @dev Can only be called once, by factory
+     * @param poolConfig Pool configuration struct
+     * @param vestingConfig Vesting configuration struct
+     * @param _whitelistRoot Merkle root for whitelist
+     * @param _creator Pool creator address
+     * @param _stakingTiers Staking tiers contract address
+     * @param _feeCollector Fee collector address
+     * @param _platformFeeBps Platform fee in basis points
+     */
+    function initialize(
+        DataTypes.PoolConfig calldata poolConfig,
+        DataTypes.VestingConfig calldata vestingConfig,
+        bytes32 _whitelistRoot,
+        address _creator,
+        address _stakingTiers,
+        address _feeCollector,
+        uint256 _platformFeeBps
+    ) external;
+
     /**
      * @notice Participate in the IDO sale
      * @param amount Amount of the payment token to contribute
@@ -135,14 +110,14 @@ interface IPool {
      * @notice Get complete pool information
      * @return Pool configuration and state
      */
-    function getPoolInfo() external view returns (PoolInfo memory);
+    function getPoolInfo() external view returns (DataTypes.PoolInfo memory);
 
     /**
      * @notice Get the user's participation information
      * @param user Address of the user
      * @return User's contribution and allocation details
      */
-    function getUserInfo(address user) external view returns (UserInfo memory);
+    function getUserInfo(address user) external view returns (DataTypes.UserInfo memory);
 
     /**
      * @notice Calculate the token user would receive for an amount
