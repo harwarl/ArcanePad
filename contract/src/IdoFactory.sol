@@ -44,6 +44,9 @@ contract IDOFactory is IFactory, Ownable {
         // ValidateVestingConfig
         _validateVestingConfig(vestingConfig);
 
+        // Validate Whilelist Root
+        _validateWhiteListRoot(poolConfig, whitelistRoot);
+
         // Create a new Pool
         IDOPool pool = new IDOPool();
 
@@ -179,6 +182,28 @@ contract IDOFactory is IFactory, Ownable {
             "IDOFactory: Vesting duration too long (maximum 4 years)"
         );
         require(vestingConfig.cliff <= 365 days, "IDOFactory: Cliff period too long (maximum 1 year)");
+    }
+
+    /**
+     * @notice Validate whitelist root parameter
+     * @param poolConfig The pool configuration
+     * @param whitelistRoot The merkle root for whitelist
+     */
+    function _validateWhiteListRoot(PoolConfig calldata poolConfig, bytes32 whitelistRoot) internal pure {
+        if (poolConfig.whitelistEnabled) {
+            //  If whitelist is enabled, root cannot be empty
+            require(whitelistRoot != bytes32(0), "IDOFactory: Whitelist enabled but root is empty");
+
+            // Root should not be a known invalid value
+            // Merkle root of empty tree is typically a specific hash
+            require(whitelistRoot != keccak256(""), "IDOFactory: Invalid whitelist root (empty hash)");
+        } else {
+            // If whitelist is disabled, root should be empty (optional but recommended)
+            // This is a soft check - you might allow a root even if whitelist is disabled
+            // for potential future enabling
+            // Require empty root (strict)
+            require(whitelistRoot == bytes32(0), "IDOFactory: Whitelist disabled but root provided");
+        }
     }
 
     /**
