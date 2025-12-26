@@ -3,7 +3,6 @@ pragma solidity ^0.8.16;
 
 import "../library/DataTypes.sol";
 
-
 /**
  * @title IDOPool
  * @notice Individual IDO pool contrcat for token sales
@@ -27,7 +26,7 @@ interface IPool {
 
     // ======================== ENUMS ========================
     enum PoolStatus {
-        Upcoming,
+        Init,
         Active,
         Ended,
         Finalized,
@@ -41,19 +40,18 @@ interface IPool {
         Silver, // Tier 2
         Gold, // Tier 3
         Diamond // Tier 4
+
     }
 
     // ======================== EVENTS ========================
-    event Participated(address indexed user, uint256 amount, uint256 tokensAllocated, uint8 tier, uint256 timestamp);
+    event PoolInitialized(address indexed creator, address indexed tokenAddress, address indexed paymentToken);
+    event Participated(address indexed user, uint256 amount, uint256 tokensAllocated, uint256 timestamp);
     event TokensClaimed(address indexed user, uint256 amount, uint256 timestamp);
     event RefundClaimed(address indexed user, uint256 amount, uint256 timestamp);
     event PoolFinalized(uint256 totalRaised, uint256 totalParticipants, uint256 timestamp);
     event PoolCancelled(address admin, uint256 timestamp);
     event whitelistUpdated(bytes32 newMerkleRoot, uint256 timestamp);
     event EmergencyWithdraw(address token, uint256 amount, address to);
-
-    // ======================== STRUCTS ========================
-    
 
     // ======================== CORE FUNCTIONS ========================
     /**

@@ -5,7 +5,6 @@ pragma solidity ^0.8.16;
  * @title DataTypes
  * @notice Shared data structures for IDO system
  */
-
 library DataTypes {
     struct PoolConfig {
         address tokenAddress; // Token being sold
@@ -66,8 +65,6 @@ library DataTypes {
         bool hasClaimedRefund;
         // true if wallet has claimed the token
         bool hasClaimedTokens;
-        // user tier
-        uint8 tier;
         // guaranteed allocation is tier is valid
         uint256 guaranteedAllocation;
     }

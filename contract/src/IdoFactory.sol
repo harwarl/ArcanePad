@@ -34,10 +34,11 @@ contract IDOFactory is IFactory, Ownable {
         stakingTierContract = _stakingTierContract;
     }
 
-    function createPool(PoolConfig calldata poolConfig, VestingConfig calldata vestingConfig, bytes32 whitelistRoot)
-        external
-        returns (address)
-    {
+    function createPool(
+        DataTypes.PoolConfig calldata poolConfig,
+        DataTypes.VestingConfig calldata vestingConfig,
+        bytes32 whitelistRoot
+    ) external returns (address) {
         // Validate the PoolConfig Parameters
         _validatePoolConfig(poolConfig);
 
@@ -101,7 +102,7 @@ contract IDOFactory is IFactory, Ownable {
      * @notice Validate pool configuration parameters
      * @param poolConfig The pool configuration to validate
      */
-    function _validatePoolConfig(PoolConfig calldata poolConfig) internal view {
+    function _validatePoolConfig(DataTypes.PoolConfig calldata poolConfig) internal view {
         require(poolConfig.tokenAddress != address(0), "IDOFactory: Token address cannot be zero");
         require(_isContract(poolConfig.tokenAddress), "IDOFactory: Token address must be a contract");
         require(poolConfig.paymentToken != address(0), "IDOFactory: Payment token address cannot be zero");
@@ -149,7 +150,7 @@ contract IDOFactory is IFactory, Ownable {
      * @notice Validate vesting configuration parameters
      * @param vestingConfig The vesting configuration to validate
      */
-    function _validateVestingConfig(VestingConfig calldata vestingConfig) internal pure {
+    function _validateVestingConfig(DataTypes.VestingConfig calldata vestingConfig) internal pure {
         require(vestingConfig.tgePercent <= 10000, "IDOFactory: TGE percent cannot exceed 100% (10000 basis points)");
         if (vestingConfig.tgePercent == 10000) {
             require(
@@ -189,7 +190,7 @@ contract IDOFactory is IFactory, Ownable {
      * @param poolConfig The pool configuration
      * @param whitelistRoot The merkle root for whitelist
      */
-    function _validateWhiteListRoot(PoolConfig calldata poolConfig, bytes32 whitelistRoot) internal pure {
+    function _validateWhiteListRoot(DataTypes.PoolConfig calldata poolConfig, bytes32 whitelistRoot) internal pure {
         if (poolConfig.whitelistEnabled) {
             //  If whitelist is enabled, root cannot be empty
             require(whitelistRoot != bytes32(0), "IDOFactory: Whitelist enabled but root is empty");
