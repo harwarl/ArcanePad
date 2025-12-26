@@ -2,7 +2,7 @@
  * @title IDOFactory
  * @notice Factory contract for creating and managing IDOPools
  */
-interface IDOFactory {
+interface IFactory {
     // ========================================= STATE VARIABLES =========================================
     // address public feeCollector
     // uint256 public platformFeePercent // in BPS

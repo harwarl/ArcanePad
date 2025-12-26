@@ -2,7 +2,7 @@
  * @title IDOPool
  * @notice Individual IDO pool contrcat for token sales
  */
-interface IDOPool {
+interface IPool {
     // ========================================= STATE VARIABLES =========================================
     // address public factory;
     // address public creator;
