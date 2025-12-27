@@ -19,8 +19,8 @@ contract IDOPool is IPool, Pausable, ReentrancyGuard {
     // IDO Factory Address
     address public factory;
 
-    // Current Pool status
-    PoolStatus public status;
+    // // Current Pool status
+    // PoolStatus public status;
 
     // Current Pool Initialized state
     bool private _initialized;
@@ -46,6 +46,7 @@ contract IDOPool is IPool, Pausable, ReentrancyGuard {
     mapping(address => uint256) public contributions;
     mapping(address => uint256) public tokenAllocations;
     mapping(address => bool) public hasClaimedRefund;
+    mapping(address => bool) public hasClaimedTokens;
     mapping(uint8 => uint256) public tierAllocations;
 
     // constructor
@@ -149,20 +150,118 @@ contract IDOPool is IPool, Pausable, ReentrancyGuard {
     /**
      * @notice Claim allocated tokens after pool finalization
      */
-    function claimTokens() external {}
+    function claimTokens() external nonReentrant {
+        // validation checks
+        require(poolInfo.finalized, "IDOPool: Pool not finalized");
+        require(poolInfo.totalRaised >= poolInfo.softCap, "IDOPool: Soft cap not reached");
+        require(!poolInfo.cancelled, "IDOPool: Pool was cancelled");
+        require(tokenAllocations[_msgSender()] > 0, "IDOPool: No Tokens allocated");
+        require(!hasClaimedTokens[_msgSender()], "IDOPool: Tokens already claimed");
+
+        uint256 totalAllocation = tokenAllocations[_msgSender()];
+
+        if (vestingConfig.tgePercent == 10000) {
+            IERC20(poolInfo.token).safeTransfer(_msgSender(), totalAllocation);
+            emit TokensClaimed(_msgSender(), totalAllocation, block.timestamp);
+        } else {
+            // TODO: Handle the actual vesting by calling the vesting contract
+        }
+    }
 
     /**
      * @notice Claim refund if pool failed or was cancelled
      */
-    function claimRefund() external {}
+    function claimRefund() external nonReentrant {
+        bool isFailed = (block.timestamp > poolInfo.endTime && poolInfo.totalRaised < poolInfo.softCap);
+        bool isCancelled = poolInfo.cancelled;
+
+        require(isFailed || isCancelled, "IDOPool: Pool not failed or cancelled");
+
+        // CHeck users contribution
+        uint256 userContribution = contributions[_msgSender()];
+        require(userContribution > 0, "IDOPool: No contribution to refund");
+
+        // Check if user has already claimed refund
+        require(!hasClaimedRefund[_msgSender()], "IDOPool: Refund already claimed");
+
+        // Process Refund
+        // Update the state
+        hasClaimedRefund[_msgSender()] = true;
+
+        // Transfer refund based on the payment token
+        if (poolInfo.token == address(0)) {
+            (bool success,) = _msgSender().call{value: userContribution}("");
+            require(success, "IDOPool: Native toke transfer failed");
+        } else {
+            // ERC20 token refund
+            IERC20(poolInfo.paymentToken).safeTransfer(_msgSender(), userContribution);
+        }
+
+        emit RefundClaimed(_msgSender(), userContribution, block.timestamp);
+    }
+
+    /**
+     *
+     * @param user address of the user to check
+     * @return bool true if the user can and false if he can't
+     * @return reason
+     */
+    function canClaimTokens(address user) external view returns (bool, string memory) {
+        if (!poolInfo.finalized) {
+            return (false, "Pool not finalized");
+        }
+
+        if (poolInfo.totalRaised < poolInfo.softCap) {
+            return (false, "Soft cap not reached");
+        }
+
+        if (poolInfo.cancelled) {
+            return (false, "Pool was cancelled");
+        }
+
+        if (tokenAllocations[user] == 0) {
+            return (false, "No tokens allocated");
+        }
+
+        if (hasClaimedTokens[user]) {
+            return (false, "Already claimed");
+        }
+
+        return (true, "");
+    }
+
+    /**
+     *
+     * @param user address of the user to check
+     * @return bool true if the user can and false if he can't
+     * @return reason
+     */
+    function canClaimRefund(address user) external view returns (bool, string memory) {
+        bool isFailed = (block.timestamp > poolInfo.endTime && poolInfo.totalRaised < poolInfo.softCap);
+        bool isCancelled = poolInfo.cancelled;
+
+        if (!isFailed && !isCancelled) {
+            return (false, "Pool not failed or cancelled");
+        }
+
+        if (contributions[user] == 0) {
+            return (false, "No contributions");
+        }
+
+        if (hasClaimedRefund[user]) {
+            return (false, "Already claimed");
+        }
+
+        return (true, "");
+    }
 
     /**
      * @notice Get Current pool status
      * @return Current status of the pool
      */
-    function getPoolStatus() external view returns (PoolStatus) {
-        return status;
-    }
+    // function getPoolStatus() external view returns (PoolStatus) {
+    //     return status;
+    // }
 
     /**
      * @notice Get complete pool information
@@ -193,7 +292,7 @@ contract IDOPool is IPool, Pausable, ReentrancyGuard {
      * @return Amount of tokens to be allocated
      */
     function calculateTokenAllocation(uint256 paymentTokenAmount) external view returns (uint256) {
-       return _calculateTokenAllocation(paymentTokenAmount);
+        return _calculateTokenAllocation(paymentTokenAmount);
     }
 
     /**
@@ -201,7 +300,7 @@ contract IDOPool is IPool, Pausable, ReentrancyGuard {
      * @param user Address of the user
      * @return Tier Level (0-5)
      */
-    function getUserTier(address user) external view returns (uint8){
+    function getUserTier(address user) external view returns (uint8) {
         return 2;
     }
 
@@ -225,7 +324,9 @@ contract IDOPool is IPool, Pausable, ReentrancyGuard {
      * @notice Get remaining allocation available
      * @return Available amount that can still be raised
      */
-    function getRemainingAllocation() external view returns (uint256) {}
+    function getRemainingAllocation() external view returns (uint256) {
+        return poolInfo.hardCap - poolInfo.totalRaised;
+    }
 
     /**
      * @notice Gets the list of all participants
@@ -239,7 +340,12 @@ contract IDOPool is IPool, Pausable, ReentrancyGuard {
      * @notice Get progress percentahe (raised/hardcap)
      * @return Progress in Basis Point (10000 = 100%)
      */
-    function getProgress() external view returns (uint256) {}
+    function getProgress() external view returns (uint256) {
+        if (poolInfo.hardCap == 0) {
+            return 0;
+        }
+        return (poolInfo.totalRaised * 10000) / poolInfo.hardCap;
+    }
 
     /**
      * @notice check if soft cap was reached
@@ -270,13 +376,48 @@ contract IDOPool is IPool, Pausable, ReentrancyGuard {
      * @notice Finalize the pool after end time
      * @dev can only be called after end time if soft cap reached
      */
-    function finalize() external {}
+    function finalize() external {
+        require(block.timestamp >= poolInfo.endTime, "IDOPool: Sales still ongoing");
+        require(!poolInfo.cancelled, "IDOPool: Pool Cancelled");
+        require(!poolInfo.finalized, "IDOPool: Pool Finalized");
+        require(poolInfo.totalRaised >= poolInfo.softCap, "IDOPool: Soft cap not met");
+
+        // Mark as finalized first
+        poolInfo.finalized = true;
+
+        _transferWithFee();
+
+        // Verify Token Balance
+        uint256 totalTokensNeeded = _getTotalTokenAllocations();
+        uint256 contractTokenBalance = IERC20(poolInfo.token).balanceOf(address(this));
+
+        require(contractTokenBalance >= totalTokensNeeded, "IDOPool: Insufficient IDO Tokens");
+
+        emit PoolFinalized(poolInfo.totalRaised, poolInfo.totalParticipants, block.timestamp);
+    }
 
     /**
      * @notice Cancel the pool (emerygency only)
      * @dev can only be called by the factory or creator
      */
-    function cancel() external {}
+    function cancel() external {
+        require(_msgSender() == factory || _msgSender() == creator, "IDOPool: Only creator or factory");
+        require(!poolInfo.cancelled, "IDOPool: Pool Cancelled");
+        require(!poolInfo.finalized, "IDOPool: Pool Finalized");
+
+        // mark as cancelled
+        poolInfo.cancelled = true;
+
+        // return unsold tokens to the creator
+        uint256 contractTokenBalance = IERC20(poolInfo.token).balanceOf(address(this));
+
+        if(contractTokenBalance > 0){
+            IERC20(poolInfo.token).safeTransfer(creator, contractTokenBalance);
+        }
+
+        // Emit Event
+        emit PoolCancelled(_msgSender(), block.timestamp);
+    }
 
     /**
      * @notice Update whitelist merkle root
@@ -361,14 +502,66 @@ contract IDOPool is IPool, Pausable, ReentrancyGuard {
      * @param amount Amount to calculate fee on
      * @return fee amount
      */
-    function _calculatePlatformFee(uint256 amount) internal view returns (uint256) {}
+    function _calculatePlatformFee(uint256 amount) internal view returns (uint256) {
+        return (amount * platformFeeBps) / 10000;
+    }
 
     /**
      * @notice transfer tokens with fee deduction
-     * @param to Recipeint Address
-     * @param amount Amount to transfer
      */
-    function _transferWithFee(address to, uint256 amount) internal {}
+    function _transferWithFee() internal {
+        // Calculate amount and remove platform fees
+        uint256 totalRaised = poolInfo.totalRaised;
+        uint256 platformFee = _calculatePlatformFee(totalRaised);
+        uint256 creatorAmount = totalRaised - platformFee;
+
+        // Verify amounts
+        require(platformFee + creatorAmount == totalRaised, "IDOPool: Amount mismatch");
+        // Tranfer raised funds
+        _transferRaisedFunds(platformFee, creatorAmount);
+    }
+
+    /**
+     * @notice Transfer raised funds to fee collector and creator
+     * @param platformFee Fee amount for platform
+     * @param creatorAmount Amount for pool creator
+     */
+    function _transferRaisedFunds(uint256 platformFee, uint256 creatorAmount) internal {
+        // if paymentToken is native
+        if (poolInfo.paymentToken == address(0)) {
+            if (platformFee > 0) {
+                // Transfer Fee to the feeCollector
+                (bool feeSuccess,) = feeCollector.call{value: platformFee}("");
+                require(feeSuccess, "IDOPool: Fee Transfer failed");
+            }
+
+            if (creatorAmount > 0) {
+                (bool creatorSuccess,) = creator.call{value: creatorAmount}("");
+                require(creatorSuccess, "IDOPool: Creator transfer failed");
+            }
+        } else {
+            // ERC20 transfer
+            if (platformFee > 0) {
+                IERC20(poolInfo.paymentToken).safeTransfer(feeCollector, platformFee);
+            }
+            if (creatorAmount > 0) IERC20(poolInfo.token).safeTransfer(creator, creatorAmount);
+        }
+    }
+
+    /**
+     * @notice get total token allocations for all participants
+     * @return Total tokens allocated
+     */
+    function _getTotalTokenAllocations() internal view returns (uint256) {
+        uint256 total = 0;
+        uint256 participantCount = participants.length;
+
+        for(uint256 i = 0; i < participantCount; i++){
+            total += tokenAllocations[participants[i]];
+        }
+
+        return total;
+    }
 
     /**
      * @dev Internal function to set pool configuration
@@ -421,7 +614,7 @@ contract IDOPool is IPool, Pausable, ReentrancyGuard {
      * @param amount payment token amount
      * @param merkleProof merkle Proof
      */
-    function _canParticipate(uint256 amount, bytes32[] calldata merkleProof) private {
+    function _canParticipate(uint256 amount, bytes32[] calldata merkleProof) private view {
         // timestamp checks
         require(block.timestamp >= poolInfo.startTime, "IDOPool: Sales not started");
         require(block.timestamp < poolInfo.endTime, "IDOPool: Sales ended");

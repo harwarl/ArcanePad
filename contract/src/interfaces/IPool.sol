@@ -101,10 +101,26 @@ interface IPool {
     function claimRefund() external;
 
     /**
+     *
+     * @param user address of the user to check
+     * @return bool true if the user can and false if he can't
+     * @return reason
+     */
+    function canClaimTokens(address user) external view returns (bool, string memory);
+
+    /**
+     *
+     * @param user address of the user to check
+     * @return bool true if the user can and false if he can't
+     * @return reason
+     */
+    function canClaimRefund(address user) external view returns (bool, string memory);
+
+    /**
      * @notice Get Current pool status
      * @return Current status of the pool
      */
-    function getPoolStatus() external view returns (PoolStatus);
+    // function getPoolStatus() external view returns (PoolStatus);
 
     /**
      * @notice Get complete pool information
