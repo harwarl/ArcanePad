@@ -53,18 +53,18 @@ contract IDOFactory is IFactory, Ownable {
         IDOPool pool = new IDOPool();
 
         // Create a vesting contract
-        Vesting _vesting = new Vesting(poolConfig.tokenAddress);
+        Vesting vesting = new Vesting(poolConfig.tokenAddress);
 
         // Initialize pool
         pool.initialize(
-            _poolConfig,
-            _vestingConfig,
-            _whitelistRoot,
-            _whitelistEnabled,
-            _creator,
-            _feeCollector,
-            _vesting,
-            _platformFeeBps
+            poolConfig,
+            vestingConfig,
+            whitelistRoot,
+            false,
+            msg.sender,
+            feeCollector,
+            address(vesting),
+            platformFeeBps
         );
 
         // Add the pool to the array of pools
