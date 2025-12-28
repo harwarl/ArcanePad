@@ -2,6 +2,7 @@
 pragma solidity ^0.8.19;
 
 import "./interfaces/IFactory.sol";
+import "./vesting/Vesting.sol";
 import "./IDOPool.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
@@ -50,6 +51,21 @@ contract IDOFactory is IFactory, Ownable {
 
         // Create a new Pool
         IDOPool pool = new IDOPool();
+
+        // Create a vesting contract
+        Vesting _vesting = new Vesting(poolConfig.tokenAddress);
+
+        // Initialize pool
+        pool.initialize(
+            _poolConfig,
+            _vestingConfig,
+            _whitelistRoot,
+            _whitelistEnabled,
+            _creator,
+            _feeCollector,
+            _vesting,
+            _platformFeeBps
+        );
 
         // Add the pool to the array of pools
         allPools.push(address(pool));

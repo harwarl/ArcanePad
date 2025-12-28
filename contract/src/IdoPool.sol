@@ -3,19 +3,26 @@ pragma solidity ^0.8.16;
 
 import "./interfaces/IPool.sol";
 import "./library/DataTypes.sol";
+import "./vesting/Vesting.sol";
+import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/security/Pausable.sol";
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
+import "@openzeppelin/contracts/access/Ownable2Step.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
 
-contract IDOPool is IPool, Pausable, ReentrancyGuard {
+contract IDOPool is IPool, Pausable, ReentrancyGuard, AccessControl, Ownable2Step {
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
 
     // ======================== STATE VARIABLES ========================
+
+    // OPERATOR_ROLE
+    bytes32 public constant OPERATOR_ROLE = keccak256("OPERATOR_ROLE");
+
     // IDO Factory Address
     address public factory;
 
@@ -37,21 +44,67 @@ contract IDOPool is IPool, Pausable, ReentrancyGuard {
     // whiteList enabled
     bool public whitelistEnabled;
 
+    // Creator Address
     address public creator;
+
     address public stakingTiersContract;
+    // Address to collect platform fee
     address public feeCollector;
+    // Address of the vesting contract
+    Vesting public vesting;
+    // Platform fee Basis point
     uint256 private platformFeeBps;
+    // participants of the sale
     address[] public participants;
+    // Total token allocation
+    uint256 private totalAllocations;
 
     mapping(address => uint256) public contributions;
     mapping(address => uint256) public tokenAllocations;
     mapping(address => bool) public hasClaimedRefund;
     mapping(address => bool) public hasClaimedTokens;
     mapping(uint8 => uint256) public tierAllocations;
+    mapping(address => bytes32) private userVestingScheduleId;
 
-    // constructor
+    modifier onlyOperator() {
+        require(hasRole(OPERATOR_ROLE, msg.sender), "IDOPool: Not Operator");
+        _;
+    }
+
+    modifier onlyFactory() {
+        require(_msgSender() == factory, "IDOPool: Only Factory");
+        _;
+    }
+
+    // constructor set the factory address
     constructor() {
         factory = _msgSender();
+    }
+
+    /**
+     * @dev Add an account to the operator role.
+     * @param account address
+     */
+    function addOperator(address account) public onlyOwner {
+        require(!hasRole(OPERATOR_ROLE, account), "IDOPool: Is Operator");
+        grantRole(OPERATOR_ROLE, account);
+    }
+
+    /**
+     * @dev Remove an account from the operator role.
+     * @param account address
+     */
+    function removeOperator(address account) public onlyOwner {
+        require(hasRole(OPERATOR_ROLE, account), "IDOPool: Not an Operator");
+        revokeRole(OPERATOR_ROLE, account);
+    }
+
+    /**
+     * @dev Check if an account is operator.
+     * @param account address
+     */
+    function checkOperator(address account) public view returns (bool) {
+        return hasRole(OPERATOR_ROLE, account);
     }
 
     /**
@@ -61,8 +114,8 @@ contract IDOPool is IPool, Pausable, ReentrancyGuard {
      * @param _vestingConfig Vesting configuration struct
      * @param _whitelistRoot Merkle root for whitelist
      * @param _creator Pool creator address
-     * @param _stakingTiers Staking tiers contract address
      * @param _feeCollector Fee collector address
+     * @param _vesting The vesting contract address
      * @param _platformFeeBps Platform fee in basis points
      */
     function initialize(
@@ -71,17 +124,18 @@ contract IDOPool is IPool, Pausable, ReentrancyGuard {
         bytes32 _whitelistRoot,
         bool _whitelistEnabled,
         address _creator,
-        address _stakingTiers,
         address _feeCollector,
+        address _vesting,
         uint256 _platformFeeBps
-    ) external {
-        require(factory == _msgSender(), "IDOPool: only factory can initialize");
+    ) external onlyFactory {
         require(!_initialized, "IDOPool: Pool Already Initialized");
 
         // Split into internal functions to reduce stack depth
         _initializePoolConfig(_poolConfig);
-        _initializeAddresses(_creator, _stakingTiers, _feeCollector, _platformFeeBps);
+        _initializeAddresses(_creator, _feeCollector, _platformFeeBps);
         _initializeVesting(_vestingConfig, _whitelistRoot);
+
+        vesting = Vesting(payable(_vesting));
 
         _initialized = true;
         whitelistEnabled = _whitelistEnabled;
@@ -110,6 +164,7 @@ contract IDOPool is IPool, Pausable, ReentrancyGuard {
         // Update State
         contributions[_msgSender()] += amount;
         tokenAllocations[_msgSender()] += tokensToAllocate;
+        totalAllocations = totalAllocations.add(amount);
         poolInfo.totalRaised += amount;
 
         // Transfer Payment
@@ -142,6 +197,7 @@ contract IDOPool is IPool, Pausable, ReentrancyGuard {
         // Update State
         contributions[_msgSender()] += amount;
         tokenAllocations[_msgSender()] += tokensToAllocate;
+        totalAllocations += amount;
         poolInfo.totalRaised += amount;
 
         emit Participated(_msgSender(), amount, tokensToAllocate, block.timestamp);
@@ -159,12 +215,53 @@ contract IDOPool is IPool, Pausable, ReentrancyGuard {
         require(!hasClaimedTokens[_msgSender()], "IDOPool: Tokens already claimed");
 
         uint256 totalAllocation = tokenAllocations[_msgSender()];
+        uint256 vestingTgePercent = vestingConfig.tgePercent;
 
-        if (vestingConfig.tgePercent == 10000) {
+        if (vestingTgePercent == 10000) {
             IERC20(poolInfo.token).safeTransfer(_msgSender(), totalAllocation);
             emit TokensClaimed(_msgSender(), totalAllocation, block.timestamp);
         } else {
-            // TODO: Handle the actual vesting by calling the vesting contract
+            // Handle Vesting with the vesting contract
+            uint256 tgeAmount = (vestingTgePercent * totalAllocation) / 10000;
+            uint256 vestingAmount = totalAllocation - tgeAmount;
+
+            // Tranfer TGE Amount immediately
+            if (tgeAmount > 0) {
+                IERC20(poolInfo.token).safeTransfer(_msgSender(), tgeAmount);
+                emit TokensClaimed(_msgSender(), totalAllocation, block.timestamp);
+            }
+
+            // Create a vesting scehdule for remaining tokens
+            if (vestingAmount > 0) {
+                // Apporve vesting contract to spend tokens
+                IERC20(poolInfo.token).safeApprove(address(vesting), vestingAmount);
+
+                // Tranfer tokens to vesting contract
+                IERC20(poolInfo.token).safeTransfer(address(vesting), vestingAmount);
+
+                // Create vesting schedule
+
+                vesting.createVestingSchedule(
+                    _msgSender(),
+                    vestingConfig.cliff,
+                    block.timestamp,
+                    vestingConfig.vestingDuration,
+                    vestingConfig.vestingInterval,
+                    false,
+                    vestingAmount
+                );
+
+                // Store schedule ID
+                bytes32 scheduleId = vesting.computeVestingScheduleIdForAddressAndIndex(
+                    _msgSender(), vesting.getVestingScheduleCountByBeneficiary(_msgSender())
+                );
+
+                userVestingScheduleId[_msgSender()] = scheduleId;
+
+                emit VestingScheduleCreated(
+                    _msgSender(), vestingAmount, vestingConfig.cliff, vestingConfig.vestingDuration, block.timestamp
+                );
+            }
         }
     }
 
@@ -177,7 +274,7 @@ contract IDOPool is IPool, Pausable, ReentrancyGuard {
 
         require(isFailed || isCancelled, "IDOPool: Pool not failed or cancelled");
 
-        // CHeck users contribution
+        // Check users contribution
         uint256 userContribution = contributions[_msgSender()];
         require(userContribution > 0, "IDOPool: No contribution to refund");
 
@@ -282,7 +379,7 @@ contract IDOPool is IPool, Pausable, ReentrancyGuard {
             totalAllocation: tokenAllocations[user],
             hasClaimedRefund: hasClaimedRefund[user],
             hasClaimedTokens: false,
-            guaranteedAllocation: 200
+            guaranteedAllocation: 230 // TODO: add function to get the guaranteed Allocation
         });
     }
 
@@ -299,10 +396,11 @@ contract IDOPool is IPool, Pausable, ReentrancyGuard {
      * @notice Get user's tier from staking contract
      * @param user Address of the user
      * @return Tier Level (0-5)
+     * TODO: finish the user tier contract
      */
-    function getUserTier(address user) external view returns (uint8) {
-        return 2;
-    }
+    // function getUserTier(address user) external view returns (uint8) {
+    //     return uint8(UserTier.Diamond);
+    // }
 
     /**
      * @notice Check if user is whitelisted
@@ -318,7 +416,9 @@ contract IDOPool is IPool, Pausable, ReentrancyGuard {
      * @param tier Tier Level
      * @return Allocation amount in payment token
      */
-    function getTierAllocation(uint8 tier) external view returns (uint256) {}
+    function getTierAllocations(uint8 tier) external view returns (uint256) {
+        return tierAllocations[tier];
+    }
 
     /**
      * @notice Get remaining allocation available
@@ -368,7 +468,8 @@ contract IDOPool is IPool, Pausable, ReentrancyGuard {
      * @return Seconds remaining (0 if ended)
      */
     function getTimeRemaining() external view returns (uint256) {
-        return poolInfo.endTime - poolInfo.startTime;
+        if (block.timestamp > poolInfo.endTime) return 0;
+        return poolInfo.endTime - block.timestamp;
     }
 
     // ======================== ADMIN FUNCTIONS ========================
@@ -376,7 +477,7 @@ contract IDOPool is IPool, Pausable, ReentrancyGuard {
      * @notice Finalize the pool after end time
      * @dev can only be called after end time if soft cap reached
      */
-    function finalize() external {
+    function finalize() external onlyOperator {
         require(block.timestamp >= poolInfo.endTime, "IDOPool: Sales still ongoing");
         require(!poolInfo.cancelled, "IDOPool: Pool Cancelled");
         require(!poolInfo.finalized, "IDOPool: Pool Finalized");
@@ -400,8 +501,7 @@ contract IDOPool is IPool, Pausable, ReentrancyGuard {
      * @notice Cancel the pool (emerygency only)
      * @dev can only be called by the factory or creator
      */
-    function cancel() external {
-        require(_msgSender() == factory || _msgSender() == creator, "IDOPool: Only creator or factory");
+    function cancel() external onlyOperator {
         require(!poolInfo.cancelled, "IDOPool: Pool Cancelled");
         require(!poolInfo.finalized, "IDOPool: Pool Finalized");
 
@@ -411,7 +511,7 @@ contract IDOPool is IPool, Pausable, ReentrancyGuard {
         // return unsold tokens to the creator
         uint256 contractTokenBalance = IERC20(poolInfo.token).balanceOf(address(this));
 
-        if(contractTokenBalance > 0){
+        if (contractTokenBalance > 0) {
             IERC20(poolInfo.token).safeTransfer(creator, contractTokenBalance);
         }
 
@@ -425,6 +525,7 @@ contract IDOPool is IPool, Pausable, ReentrancyGuard {
      */
     function updateWhitelist(bytes32 newMerkleRoot) external {
         whitelistRoot = newMerkleRoot;
+        emit whitelistUpdated(newMerkleRoot, block.timestamp);
     }
 
     /**
@@ -432,20 +533,80 @@ contract IDOPool is IPool, Pausable, ReentrancyGuard {
      * @param tiers Array of tier levels
      * @param allocations Array of allocation amounts
      */
-    function setTierAllocations(uint8[] calldata tiers, uint256[] calldata allocations) external {}
+    function setTierAllocations(uint8[] calldata tiers, uint256[] calldata allocations) external onlyOperator {
+        require(block.timestamp < poolInfo.startTime, "IDOPool: cannot modify after sale starts");
+        require(!poolInfo.cancelled, "IDOPool: Cancelled");
+        require(!poolInfo.finalized, "IDOPool: Finalized");
+        require(tiers.length == allocations.length, "IDOPool: Mismatch Length");
+        require(tiers.length > 0, "IDOPool: Empty arrays");
+        require(tiers.length <= 5, "IDOPool: Too many tiers");
 
-    /**
-     * @notice Withdraw raised funds (after finalization)
-     * @param to Address to send funds
-     */
-    function withdrawRaisedFunds(address to) external {}
+        for (uint256 i = 0; i < tiers.length; i++) {
+            uint8 tier = tiers[i];
+            uint256 allocation = allocations[i];
+
+            require(tier <= 5, "IDOPool: Invalid tier level");
+            require(allocation >= poolInfo.minContribution || allocation == 0, "IDOPool: Allocation below minimum");
+
+            require(allocation <= poolInfo.maxContribution, "IDOPool: Allocation above maximum");
+
+            tierAllocations[tier] = allocation;
+
+            emit TierAllocationsSet(tier, allocation, block.timestamp);
+        }
+    }
 
     /**
      * @notice Emergency withdraw tokens (only unsold tokens)
      * @param token Token address to withdraw
      * @param to Address to send to
      */
-    function emergencyWithdrawTokens(address token, address to) external {}
+    function emergencyWithdrawTokens(address token, address to) external nonReentrant onlyOperator {
+        require(token != address(0), "IDOPool: Invalid token");
+        require(to != address(0), "IDOPool: Invalid recipient");
+
+        uint256 tokenBalance = IERC20(token).balanceOf(address(this));
+        require(tokenBalance > 0, "IDOPool: No tokens to withdraw");
+
+        if (token == poolInfo.paymentToken) {
+            // can only withdraw if:
+            // - Pool is cancelled OR Pool Ended + 30 days passed
+            bool canWithdraw = poolInfo.cancelled || (block.timestamp > poolInfo.endTime + 30 days);
+
+            require(canWithdraw, "IDOPool: Payment token locked");
+            require(tokenBalance > poolInfo.totalRaised, "IDOPool: No excess payment tokens");
+
+            uint256 withdrawAmount = tokenBalance - poolInfo.totalRaised;
+            IERC20(token).safeTransfer(to, withdrawAmount);
+
+            emit EmergencyWithdraw(token, withdrawAmount, to, block.timestamp);
+        }
+
+        if (token == poolInfo.token) {
+            // Can only withdraw if pool is cancelled or finalized
+            if (poolInfo.cancelled) {
+                IERC20(token).safeTransfer(to, tokenBalance);
+                emit EmergencyWithdraw(token, tokenBalance, to, block.timestamp);
+            }
+
+            if (poolInfo.finalized) {
+                // Only withdraw unsold tokens
+                // Get total allocations
+                uint256 allocated = _getTotalTokenAllocations();
+                require(tokenBalance > allocated, "IDOPool: No excess tokens");
+
+                uint256 withdrawAmount = tokenBalance - allocated;
+                IERC20(token).safeTransfer(to, withdrawAmount);
+                emit EmergencyWithdraw(token, withdrawAmount, to, block.timestamp);
+                return;
+            }
+            revert("IDOPool: IDO token is locked");
+        }
+
+        // Transfer other tokens out
+        IERC20(token).safeTransfer(to, tokenBalance);
+        emit EmergencyWithdraw(token, tokenBalance, to, block.timestamp);
+    }
 
     /**
      * @notice Pause the pool
@@ -556,7 +717,7 @@ contract IDOPool is IPool, Pausable, ReentrancyGuard {
         uint256 total = 0;
         uint256 participantCount = participants.length;
 
-        for(uint256 i = 0; i < participantCount; i++){
+        for (uint256 i = 0; i < participantCount; i++) {
             total += tokenAllocations[participants[i]];
         }
 
@@ -589,14 +750,8 @@ contract IDOPool is IPool, Pausable, ReentrancyGuard {
     /**
      * @dev Internal function to set addresses
      */
-    function _initializeAddresses(
-        address _creator,
-        address _stakingTiers,
-        address _feeCollector,
-        uint256 _platformFeeBps
-    ) private {
+    function _initializeAddresses(address _creator, address _feeCollector, uint256 _platformFeeBps) private {
         creator = _creator;
-        stakingTiersContract = _stakingTiers;
         feeCollector = _feeCollector;
         platformFeeBps = _platformFeeBps;
     }

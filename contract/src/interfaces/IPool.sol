@@ -51,7 +51,9 @@ interface IPool {
     event PoolFinalized(uint256 totalRaised, uint256 totalParticipants, uint256 timestamp);
     event PoolCancelled(address admin, uint256 timestamp);
     event whitelistUpdated(bytes32 newMerkleRoot, uint256 timestamp);
-    event EmergencyWithdraw(address token, uint256 amount, address to);
+    event EmergencyWithdraw(address token, uint256 amount, address to, uint256 timestamp);
+    event TierAllocationsSet(uint8 tier, uint256 amount, uint256 timestamp);
+    event VestingScheduleCreated(address indexed user, uint256 amount, uint256 cliff, uint256 duration, uint256 start);
 
     // ======================== CORE FUNCTIONS ========================
     /**
@@ -62,8 +64,8 @@ interface IPool {
      * @param _whitelistRoot Merkle root for whitelist
      * @param _whitelistEnabled tag to check whitelist
      * @param _creator Pool creator address
-     * @param _stakingTiers Staking tiers contract address
      * @param _feeCollector Fee collector address
+     * @param _vestingContract Vesting contract
      * @param _platformFeeBps Platform fee in basis points
      */
     function initialize(
@@ -72,8 +74,8 @@ interface IPool {
         bytes32 _whitelistRoot,
         bool _whitelistEnabled,
         address _creator,
-        address _stakingTiers,
         address _feeCollector,
+        address _vestingContract,
         uint256 _platformFeeBps
     ) external;
 
@@ -147,7 +149,7 @@ interface IPool {
      * @param user Address of the user
      * @return Tier Level (0-5)
      */
-    function getUserTier(address user) external view returns (uint8);
+    // function getUserTier(address user) external view returns (uint8);
 
     /**
      * @notice Check if user is whitelisted
@@ -157,11 +159,11 @@ interface IPool {
     function isWhitelisted(address user, bytes32[] calldata merkleProof) external view returns (bool);
 
     /**
-     * @notice Get Guaranteed allocation for a tier
+     * @notice Get Guaranteed allocation for tiers
      * @param tier Tier Level
      * @return Allocation amount in payment token
      */
-    function getTierAllocation(uint8 tier) external view returns (uint256);
+    function getTierAllocations(uint8 tier) external view returns (uint256);
 
     /**
      * @notice Get remaining allocation available
@@ -225,11 +227,11 @@ interface IPool {
      */
     function setTierAllocations(uint8[] calldata tiers, uint256[] calldata allocations) external;
 
-    /**
-     * @notice Withdraw raised funds (after finalization)
-     * @param to Address to send funds
-     */
-    function withdrawRaisedFunds(address to) external;
+    // /**
+    //  * @notice Withdraw raised funds (after finalization)
+    //  * @param to Address to send funds
+    //  */
+    // function withdrawRaisedFunds(address to) external;
 
     /**
      * @notice Emergency withdraw tokens (only unsold tokens)
