@@ -8,22 +8,6 @@ import "../library/DataTypes.sol";
  * @notice Individual IDO pool contrcat for token sales
  */
 interface IPool {
-    // ========================================= STATE VARIABLES =========================================
-    // IDO Factory Address
-    // address public factory;
-    // IDO creator Address
-    // address public creator
-    // WhitelistMerkleRoot
-    // bytes32 public whitelistMerkleRoot;
-    // // Current Pool status
-    // PoolStatus public status;
-
-    // // Mappings
-    // mapping(address => uint256) public contributions;
-    // mapping(address => uint256) public tokenAllocations;
-    // mapping(address => bool) public hasClaimedRefund;
-    // mapping(uint8 => uint256) public tierAllocations; // tier => guaranteed Allocation Amount
-
     // ======================== ENUMS ========================
     enum PoolStatus {
         Init,
@@ -32,15 +16,6 @@ interface IPool {
         Finalized,
         Failed,
         Cancelled
-    }
-
-    enum UserTier {
-        None, // Not Staked
-        Bronze, // Tier 1
-        Silver, // Tier 2
-        Gold, // Tier 3
-        Diamond // Tier 4
-
     }
 
     // ======================== EVENTS ========================
@@ -119,12 +94,6 @@ interface IPool {
     function canClaimRefund(address user) external view returns (bool, string memory);
 
     /**
-     * @notice Get Current pool status
-     * @return Current status of the pool
-     */
-    // function getPoolStatus() external view returns (PoolStatus);
-
-    /**
      * @notice Get complete pool information
      * @return Pool configuration and state
      */
@@ -145,25 +114,11 @@ interface IPool {
     function calculateTokenAllocation(uint256 paymentTokenAmmount) external view returns (uint256);
 
     /**
-     * @notice Get user's tier from staking contract
-     * @param user Address of the user
-     * @return Tier Level (0-5)
-     */
-    // function getUserTier(address user) external view returns (uint8);
-
-    /**
      * @notice Check if user is whitelisted
      * @param user address to check
      * @param merkleProof Merkle Proof for verification
      */
     function isWhitelisted(address user, bytes32[] calldata merkleProof) external view returns (bool);
-
-    /**
-     * @notice Get Guaranteed allocation for tiers
-     * @param tier Tier Level
-     * @return Allocation amount in payment token
-     */
-    function getTierAllocations(uint8 tier) external view returns (uint256);
 
     /**
      * @notice Get remaining allocation available
@@ -182,24 +137,6 @@ interface IPool {
      * @return Progress in Basis Point (10000 = 100%)
      */
     function getProgress() external view returns (uint256);
-
-    /**
-     * @notice check if soft cap was reached
-     * @return True if soft cap met
-     */
-    function isSoftCapReached() external view returns (bool);
-
-    /**
-     * @notice check if hard cap was reached
-     * @return True if hard cap met
-     */
-    function isHardCapReached() external view returns (bool);
-
-    /**
-     * @notice Get Time remaining until end
-     * @return Seconds remaining (0 if ended)
-     */
-    function getTimeRemaining() external view returns (uint256);
 
     // ======================== ADMIN FUNCTIONS ========================
     /**
@@ -221,19 +158,6 @@ interface IPool {
     function updateWhitelist(bytes32 newMerkleRoot) external;
 
     /**
-     * @notice Set tier allocation
-     * @param tiers Array of tier levels
-     * @param allocations Array of allocation amounts
-     */
-    function setTierAllocations(uint8[] calldata tiers, uint256[] calldata allocations) external;
-
-    // /**
-    //  * @notice Withdraw raised funds (after finalization)
-    //  * @param to Address to send funds
-    //  */
-    // function withdrawRaisedFunds(address to) external;
-
-    /**
      * @notice Emergency withdraw tokens (only unsold tokens)
      * @param token Token address to withdraw
      * @param to Address to send to
@@ -249,35 +173,4 @@ interface IPool {
      * @notice Unpause the pool
      */
     function unpause() external;
-
-    // ======================== INTERNAL FUNCTIONS ========================
-    // /**
-    //  * @notice Verify Merkle proof for whitelist
-    //  * @param user Address to verify
-    //  * @param merkleProof  Proof Array
-    //  * @return True if proof is valid
-    //  */
-    // function _verifyWhitelist(address user, bytes32[] calldata merkleProof) internal view returns(bool);
-
-    // /**
-    //  * @notice Calculate platform fee
-    //  * @param amount Amount to calculate fee on
-    //  * @return fee amount
-    //  */
-    // function _calculatePlatformFee(uint256 amount) internal view returns (uint256);
-
-    // /**
-    //  * @notice transfer tokens with fee deduction
-    //  * @param to Recipeint Address
-    //  * @param amount Amount to transfer
-    //  */
-    // function _transferWithFee(address to, uint256 amount) internal;
-
-    // /**
-    //  * @notice Check if user can participate
-    //  * @param user user Address
-    //  * @param amount contribution amount
-    //  * @param merkleProof whitelist proof
-    //  */
-    // function _canParticipate(address user, uint256 amount, bytes32[] calldata merkleProof) internal views returns (bool);
 }

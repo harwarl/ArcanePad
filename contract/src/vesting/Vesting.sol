@@ -7,6 +7,17 @@ import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
+error Vesting__InsufficientTokens();
+error Vesting__DurationZero();
+error Vesting__AmountZero();
+error Vesting__SlicePeriodZero();
+error Vesting__CliffExceedsDuration();
+error Vesting__Irrevocable();
+error Vesting__InsufficientWithdrawable();
+error Vesting__UnauthorizedRelease();
+error Vesting__InsufficientVested();
+error Vesting__IndexOutOfBounds();
+
 contract Vesting is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
     using SafeMath for uint256;
@@ -90,14 +101,26 @@ contract Vesting is Ownable, ReentrancyGuard {
         bool _revocable,
         uint256 _amount
     ) external onlyOwner {
-        require(
-            getWithdrawableAmount() >= _amount,
-            "TokenVesting: Cannot create vesting schedule because not sufficient tokens"
-        );
-        require(_duration > 0, "TokenVesting: duration must be > 0");
-        require(_amount > 0, "TokenVesting: amount must be > 0");
-        require(_slicePeriodSeconds >= 1, "TokenVesting: slicePeriodSeconds must be >= 1");
-        require(_duration >= _cliff, "TokenVesting: duration must be >= cliff");
+        if (getWithdrawableAmount() < _amount) {
+    revert Vesting__InsufficientTokens();
+}
+
+if (_duration == 0) {
+    revert Vesting__DurationZero();
+}
+
+if (_amount == 0) {
+    revert Vesting__AmountZero();
+}
+
+if (_slicePeriodSeconds < 1) {
+    revert Vesting__SlicePeriodZero();
+}
+
+if (_duration < _cliff) {
+    revert Vesting__CliffExceedsDuration();
+}
+
 
         bytes32 vestingScheduleId = computeNextVestingScheduleIdForHolder(_beneficiary);
         uint256 cliff = _start.add(_cliff);
@@ -118,7 +141,8 @@ contract Vesting is Ownable, ReentrancyGuard {
     function revoke(bytes32 vestingScheduleId) external onlyOwner onlyIfVestingScheduleNotRevoked(vestingScheduleId) {
         VestingSchedule storage vestingSchedule = vestingSchedules[vestingScheduleId];
 
-        require(vestingSchedule.revocable, "TokenVesting: vesting is not revocable");
+        if(!vestingSchedule.revocable) revert Vesting__Irrevocable();
+
         uint256 vestedAmount = _computeReleasableAmount(vestingSchedule);
 
         // If the amount is more than 0, release to the beneficiary
@@ -135,7 +159,9 @@ contract Vesting is Ownable, ReentrancyGuard {
      * @param amount the amount to withdraw
      */
     function withdraw(uint256 amount) external nonReentrant onlyOwner {
-        require(getWithdrawableAmount() >= amount, "TokenVesting: not enough withdrawable funds");
+        if (getWithdrawableAmount() < amount) {
+    revert Vesting__InsufficientWithdrawable();
+}
         _token.safeTransfer(msg.sender, amount);
     }
 
@@ -153,10 +179,15 @@ contract Vesting is Ownable, ReentrancyGuard {
         bool isBeneficiary = _msgSender() == vestingSchedule.beneficiary;
         bool isReleasor = _msgSender() == owner();
 
-        require(isBeneficiary || isReleasor, "TokenVesting: only beneficiary or owner can release vested tokens");
+        if (!isBeneficiary && !isReleasor) {
+    revert Vesting__UnauthorizedRelease();
+}
 
-        uint256 vestedAmount = _computeReleasableAmount(vestingSchedule);
-        require(vestedAmount >= amount, "TokenVesting: cannot release tokens, not enough vested tokens");
+uint256 vestedAmount = _computeReleasableAmount(vestingSchedule);
+if (vestedAmount < amount) {
+    revert Vesting__InsufficientVested();
+}
+
 
         // Add ammount to the amount released
         vestingSchedule.released = vestingSchedule.released.add(amount);
@@ -216,7 +247,10 @@ contract Vesting is Ownable, ReentrancyGuard {
      * @return the vesting id
      */
     function getVestingIdByIndex(uint256 _index) external view returns (bytes32) {
-        require(_index < getVestingScheduleCount(), "TokenVesting: index out of bounds");
+        if (_index >= getVestingScheduleCount()) {
+    revert Vesting__IndexOutOfBounds();
+}
+
         return vestingScheduleIds[_index];
     }
 

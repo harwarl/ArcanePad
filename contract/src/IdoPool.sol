@@ -353,14 +353,6 @@ contract IDOPool is IPool, Pausable, ReentrancyGuard, AccessControl, Ownable2Ste
     }
 
     /**
-     * @notice Get Current pool status
-     * @return Current status of the pool
-     */
-    // function getPoolStatus() external view returns (PoolStatus) {
-    //     return status;
-    // }
-
-    /**
      * @notice Get complete pool information
      * @return Pool configuration and state
      */
@@ -393,31 +385,12 @@ contract IDOPool is IPool, Pausable, ReentrancyGuard, AccessControl, Ownable2Ste
     }
 
     /**
-     * @notice Get user's tier from staking contract
-     * @param user Address of the user
-     * @return Tier Level (0-5)
-     * TODO: finish the user tier contract
-     */
-    // function getUserTier(address user) external view returns (uint8) {
-    //     return uint8(UserTier.Diamond);
-    // }
-
-    /**
      * @notice Check if user is whitelisted
      * @param user address to check
      * @param merkleProof Merkle Proof for verification
      */
     function isWhitelisted(address user, bytes32[] calldata merkleProof) external view returns (bool) {
         return _verifyWhitelist(user, merkleProof);
-    }
-
-    /**
-     * @notice Get Guaranteed allocation for a tier
-     * @param tier Tier Level
-     * @return Allocation amount in payment token
-     */
-    function getTierAllocations(uint8 tier) external view returns (uint256) {
-        return tierAllocations[tier];
     }
 
     /**
@@ -445,31 +418,6 @@ contract IDOPool is IPool, Pausable, ReentrancyGuard, AccessControl, Ownable2Ste
             return 0;
         }
         return (poolInfo.totalRaised * 10000) / poolInfo.hardCap;
-    }
-
-    /**
-     * @notice check if soft cap was reached
-     * @return True if soft cap met
-     */
-    function isSoftCapReached() external view returns (bool) {
-        return poolInfo.totalRaised >= poolInfo.softCap;
-    }
-
-    /**
-     * @notice check if hard cap was reached
-     * @return True if hard cap met
-     */
-    function isHardCapReached() external view returns (bool) {
-        return poolInfo.totalRaised == poolInfo.hardCap;
-    }
-
-    /**
-     * @notice Get Time remaining until end
-     * @return Seconds remaining (0 if ended)
-     */
-    function getTimeRemaining() external view returns (uint256) {
-        if (block.timestamp > poolInfo.endTime) return 0;
-        return poolInfo.endTime - block.timestamp;
     }
 
     // ======================== ADMIN FUNCTIONS ========================
@@ -526,34 +474,6 @@ contract IDOPool is IPool, Pausable, ReentrancyGuard, AccessControl, Ownable2Ste
     function updateWhitelist(bytes32 newMerkleRoot) external {
         whitelistRoot = newMerkleRoot;
         emit whitelistUpdated(newMerkleRoot, block.timestamp);
-    }
-
-    /**
-     * @notice Set tier allocation
-     * @param tiers Array of tier levels
-     * @param allocations Array of allocation amounts
-     */
-    function setTierAllocations(uint8[] calldata tiers, uint256[] calldata allocations) external onlyOperator {
-        require(block.timestamp < poolInfo.startTime, "IDOPool: cannot modify after sale starts");
-        require(!poolInfo.cancelled, "IDOPool: Cancelled");
-        require(!poolInfo.finalized, "IDOPool: Finalized");
-        require(tiers.length == allocations.length, "IDOPool: Mismatch Length");
-        require(tiers.length > 0, "IDOPool: Empty arrays");
-        require(tiers.length <= 5, "IDOPool: Too many tiers");
-
-        for (uint256 i = 0; i < tiers.length; i++) {
-            uint8 tier = tiers[i];
-            uint256 allocation = allocations[i];
-
-            require(tier <= 5, "IDOPool: Invalid tier level");
-            require(allocation >= poolInfo.minContribution || allocation == 0, "IDOPool: Allocation below minimum");
-
-            require(allocation <= poolInfo.maxContribution, "IDOPool: Allocation above maximum");
-
-            tierAllocations[tier] = allocation;
-
-            emit TierAllocationsSet(tier, allocation, block.timestamp);
-        }
     }
 
     /**
