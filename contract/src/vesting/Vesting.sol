@@ -7,20 +7,20 @@ import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
-error Vesting__InsufficientTokens();
-error Vesting__DurationZero();
-error Vesting__AmountZero();
-error Vesting__SlicePeriodZero();
-error Vesting__CliffExceedsDuration();
-error Vesting__Irrevocable();
-error Vesting__InsufficientWithdrawable();
-error Vesting__UnauthorizedRelease();
-error Vesting__InsufficientVested();
-error Vesting__IndexOutOfBounds();
-
 contract Vesting is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
     using SafeMath for uint256;
+
+    error Vesting__InsufficientTokens();
+    error Vesting__DurationZero();
+    error Vesting__AmountZero();
+    error Vesting__SlicePeriodZero();
+    error Vesting__CliffExceedsDuration();
+    error Vesting__Irrevocable();
+    error Vesting__InsufficientWithdrawable();
+    error Vesting__UnauthorizedRelease();
+    error Vesting__InsufficientVested();
+    error Vesting__IndexOutOfBounds();
 
     struct VestingSchedule {
         // beneficiary of the tokens
@@ -102,25 +102,24 @@ contract Vesting is Ownable, ReentrancyGuard {
         uint256 _amount
     ) external onlyOwner {
         if (getWithdrawableAmount() < _amount) {
-    revert Vesting__InsufficientTokens();
-}
+            revert Vesting__InsufficientTokens();
+        }
 
-if (_duration == 0) {
-    revert Vesting__DurationZero();
-}
+        if (_duration == 0) {
+            revert Vesting__DurationZero();
+        }
 
-if (_amount == 0) {
-    revert Vesting__AmountZero();
-}
+        if (_amount == 0) {
+            revert Vesting__AmountZero();
+        }
 
-if (_slicePeriodSeconds < 1) {
-    revert Vesting__SlicePeriodZero();
-}
+        if (_slicePeriodSeconds < 1) {
+            revert Vesting__SlicePeriodZero();
+        }
 
-if (_duration < _cliff) {
-    revert Vesting__CliffExceedsDuration();
-}
-
+        if (_duration < _cliff) {
+            revert Vesting__CliffExceedsDuration();
+        }
 
         bytes32 vestingScheduleId = computeNextVestingScheduleIdForHolder(_beneficiary);
         uint256 cliff = _start.add(_cliff);
@@ -141,7 +140,7 @@ if (_duration < _cliff) {
     function revoke(bytes32 vestingScheduleId) external onlyOwner onlyIfVestingScheduleNotRevoked(vestingScheduleId) {
         VestingSchedule storage vestingSchedule = vestingSchedules[vestingScheduleId];
 
-        if(!vestingSchedule.revocable) revert Vesting__Irrevocable();
+        if (!vestingSchedule.revocable) revert Vesting__Irrevocable();
 
         uint256 vestedAmount = _computeReleasableAmount(vestingSchedule);
 
@@ -160,8 +159,8 @@ if (_duration < _cliff) {
      */
     function withdraw(uint256 amount) external nonReentrant onlyOwner {
         if (getWithdrawableAmount() < amount) {
-    revert Vesting__InsufficientWithdrawable();
-}
+            revert Vesting__InsufficientWithdrawable();
+        }
         _token.safeTransfer(msg.sender, amount);
     }
 
@@ -180,14 +179,13 @@ if (_duration < _cliff) {
         bool isReleasor = _msgSender() == owner();
 
         if (!isBeneficiary && !isReleasor) {
-    revert Vesting__UnauthorizedRelease();
-}
+            revert Vesting__UnauthorizedRelease();
+        }
 
-uint256 vestedAmount = _computeReleasableAmount(vestingSchedule);
-if (vestedAmount < amount) {
-    revert Vesting__InsufficientVested();
-}
-
+        uint256 vestedAmount = _computeReleasableAmount(vestingSchedule);
+        if (vestedAmount < amount) {
+            revert Vesting__InsufficientVested();
+        }
 
         // Add ammount to the amount released
         vestingSchedule.released = vestingSchedule.released.add(amount);
@@ -248,8 +246,8 @@ if (vestedAmount < amount) {
      */
     function getVestingIdByIndex(uint256 _index) external view returns (bytes32) {
         if (_index >= getVestingScheduleCount()) {
-    revert Vesting__IndexOutOfBounds();
-}
+            revert Vesting__IndexOutOfBounds();
+        }
 
         return vestingScheduleIds[_index];
     }

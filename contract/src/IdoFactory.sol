@@ -57,14 +57,7 @@ contract IDOFactory is IFactory, Ownable {
 
         // Initialize pool
         pool.initialize(
-            poolConfig,
-            vestingConfig,
-            whitelistRoot,
-            false,
-            msg.sender,
-            feeCollector,
-            address(vesting),
-            platformFeeBps
+            poolConfig, vestingConfig, whitelistRoot, false, msg.sender, feeCollector, address(vesting), platformFeeBps
         );
 
         // Add the pool to the array of pools
