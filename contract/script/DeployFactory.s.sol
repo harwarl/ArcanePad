@@ -8,15 +8,12 @@ import "./HelperConfig.s.sol";
 contract DeployFactory is Script {
     IDOFactory public factory;
 
-    function run() public returns (IDOFactory, HelperConfig) {
-        HelperConfig helperConfig = new HelperConfig();
-        HelperConfig.NetworkConfig memory config = helperConfig.getConfig();
+    function run() public returns (IDOFactory, FactoryHelperConfig) {
+        FactoryHelperConfig helperConfig = new FactoryHelperConfig();
+        FactoryHelperConfig.NetworkConfig memory config = helperConfig.getConfig();
 
         vm.startBroadcast(config.account);
-        factory = new IDOFactory(
-            config.feeCollector,
-            config.platformBps
-        );
+        factory = new IDOFactory(config.feeCollector, config.platformBps);
         vm.stopBroadcast();
 
         return (factory, helperConfig);
