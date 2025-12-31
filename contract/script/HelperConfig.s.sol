@@ -31,7 +31,7 @@ contract HelperConfig is Script, CodeConstants {
         networkConfigs[BNB_CHAIN_ID] = getMainnetConfig();
     }
 
-    function getConfig() public returns (NetworkConfig) {
+    function getConfig() public returns (NetworkConfig memory) {
         return getConfigByChainId(block.chainid);
     }
 
