@@ -18,6 +18,7 @@ contract HelperConfig is Script, CodeConstants {
     struct NetworkConfig {
         address feeCollector;
         uint256 platformBps;
+        address account;
     }
 
     // ======================== State Variables ========================
@@ -53,14 +54,16 @@ contract HelperConfig is Script, CodeConstants {
     function getMainnetConfig() public returns (NetworkConfig memory mainnetConfig) {
         mainnetConfig = NetworkConfig({
             feeCollector: address(0),
-            platformBps: 1000
+            platformBps: 1000,
+            account: 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
         });
     }
 
     function getOrCreateAnvilConfig() public returns (NetworkConfig memory anvilConfig) {
         anvilConfig = NetworkConfig({
             feeCollector: address(0),
-            platformBps: 1000
+            platformBps: 1000,
+            account: 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
         });
     }
 }
