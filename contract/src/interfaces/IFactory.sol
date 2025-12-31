@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.16;
+
 /**
  * @title IDOFactory
  * @notice Factory contract for creating and managing IDOPools
  */
-
 import "../library/DataTypes.sol";
 
 interface IFactory {
@@ -32,14 +32,11 @@ interface IFactory {
      * @notice Create a new pool
      * @param poolConfig configuration for the pool
      * @param vestingConfig vessting schedule configuration
-     * @param whitelistRoot Merkele root for whitelist (if enabled)
      * @return pool Address of the created pool
      */
-    function createPool(
-        DataTypes.PoolConfig calldata poolConfig,
-        DataTypes.VestingConfig calldata vestingConfig,
-        bytes32 whitelistRoot
-    ) external returns (address pool);
+    function createPool(DataTypes.PoolConfig calldata poolConfig, DataTypes.VestingConfig calldata vestingConfig)
+        external
+        returns (address pool);
 
     /**
      * @notice Get all pools created by the factory

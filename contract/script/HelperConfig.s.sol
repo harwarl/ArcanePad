@@ -41,13 +41,13 @@ contract HelperConfig is Script, CodeConstants {
 
     function getConfigByChainId(uint256 chainid) public returns (NetworkConfig memory) {
         // return config based on chainid
-        if(networkConfigs[chainid]){
-            return networkConfigs[chainid];
-        } else if (chainid == LOCAL_CHAIN_ID) {
+        if (chainid == LOCAL_CHAIN_ID) {
             return getOrCreateAnvilConfig();
-        } else {
-            revert HelperConfig__InvalidChainId();
         }
+        if (networkConfigs[chainid].feeCollector != address(0) || networkConfigs[chainid].platformBps != 0) {
+            return networkConfigs[chainid];
+        }
+        revert HelperConfig__InvalidChainId();
     }
 
     function getMainnetConfig() public returns (NetworkConfig memory mainnetConfig) {

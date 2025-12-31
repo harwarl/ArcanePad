@@ -38,9 +38,6 @@ contract IDOPool is IPool, Pausable, ReentrancyGuard, AccessControl, Ownable2Ste
     // Vesting information
     DataTypes.VestingConfig public vestingConfig;
 
-    // WhiteList Root
-    bytes32 public whitelistRoot;
-
     // whiteList enabled
     bool public whitelistEnabled;
 
@@ -112,7 +109,6 @@ contract IDOPool is IPool, Pausable, ReentrancyGuard, AccessControl, Ownable2Ste
      * @dev Can only be called once, by factory
      * @param _poolConfig Pool configuration struct
      * @param _vestingConfig Vesting configuration struct
-     * @param _whitelistRoot Merkle root for whitelist
      * @param _creator Pool creator address
      * @param _feeCollector Fee collector address
      * @param _vesting The vesting contract address
@@ -121,7 +117,6 @@ contract IDOPool is IPool, Pausable, ReentrancyGuard, AccessControl, Ownable2Ste
     function initialize(
         DataTypes.PoolConfig calldata _poolConfig,
         DataTypes.VestingConfig calldata _vestingConfig,
-        bytes32 _whitelistRoot,
         bool _whitelistEnabled,
         address _creator,
         address _feeCollector,
@@ -133,7 +128,7 @@ contract IDOPool is IPool, Pausable, ReentrancyGuard, AccessControl, Ownable2Ste
         // Split into internal functions to reduce stack depth
         _initializePoolConfig(_poolConfig);
         _initializeAddresses(_creator, _feeCollector, _platformFeeBps);
-        _initializeVesting(_vestingConfig, _whitelistRoot);
+        _initializeVesting(_vestingConfig);
 
         vesting = Vesting(payable(_vesting));
 
@@ -146,10 +141,9 @@ contract IDOPool is IPool, Pausable, ReentrancyGuard, AccessControl, Ownable2Ste
     /**
      * @notice Participate in the IDO sale
      * @param amount Amount of the payment token to contribute
-     * @param merkleProof Proof for whitelist verification (if enabled)
      */
-    function participate(uint256 amount, bytes32[] calldata merkleProof) external nonReentrant whenNotPaused {
-        _canParticipate(amount, merkleProof);
+    function participate(uint256 amount) external nonReentrant whenNotPaused {
+        _canParticipate(amount);
 
         // Calculate token allocation
         uint256 tokensToAllocate = _calculateTokenAllocation(amount);
@@ -175,14 +169,13 @@ contract IDOPool is IPool, Pausable, ReentrancyGuard, AccessControl, Ownable2Ste
 
     /**
      * @notice Participate with native token (ETH/MATIC)
-     * @param merkleProof Proof for whitelise verification (if enabled)
      */
-    function participateWithNative(bytes32[] calldata merkleProof) external payable nonReentrant whenNotPaused {
+    function participateWithNative() external payable nonReentrant whenNotPaused {
         // Validate Native Token is Accepted
         require(poolInfo.paymentToken == address(0), "IDOPool: Native token not accepted");
         uint256 amount = msg.value;
 
-        _canParticipate(amount, merkleProof);
+        _canParticipate(amount);
 
         // Calculate token allocation
         uint256 tokensToAllocate = _calculateTokenAllocation(amount);
@@ -298,61 +291,6 @@ contract IDOPool is IPool, Pausable, ReentrancyGuard, AccessControl, Ownable2Ste
     }
 
     /**
-     *
-     * @param user address of the user to check
-     * @return bool true if the user can and false if he can't
-     * @return reason
-     */
-    function canClaimTokens(address user) external view returns (bool, string memory) {
-        if (!poolInfo.finalized) {
-            return (false, "Pool not finalized");
-        }
-
-        if (poolInfo.totalRaised < poolInfo.softCap) {
-            return (false, "Soft cap not reached");
-        }
-
-        if (poolInfo.cancelled) {
-            return (false, "Pool was cancelled");
-        }
-
-        if (tokenAllocations[user] == 0) {
-            return (false, "No tokens allocated");
-        }
-
-        if (hasClaimedTokens[user]) {
-            return (false, "Already claimed");
-        }
-
-        return (true, "");
-    }
-
-    /**
-     *
-     * @param user address of the user to check
-     * @return bool true if the user can and false if he can't
-     * @return reason
-     */
-    function canClaimRefund(address user) external view returns (bool, string memory) {
-        bool isFailed = (block.timestamp > poolInfo.endTime && poolInfo.totalRaised < poolInfo.softCap);
-        bool isCancelled = poolInfo.cancelled;
-
-        if (!isFailed && !isCancelled) {
-            return (false, "Pool not failed or cancelled");
-        }
-
-        if (contributions[user] == 0) {
-            return (false, "No contributions");
-        }
-
-        if (hasClaimedRefund[user]) {
-            return (false, "Already claimed");
-        }
-
-        return (true, "");
-    }
-
-    /**
      * @notice Get complete pool information
      * @return Pool configuration and state
      */
@@ -387,10 +325,9 @@ contract IDOPool is IPool, Pausable, ReentrancyGuard, AccessControl, Ownable2Ste
     /**
      * @notice Check if user is whitelisted
      * @param user address to check
-     * @param merkleProof Merkle Proof for verification
      */
-    function isWhitelisted(address user, bytes32[] calldata merkleProof) external view returns (bool) {
-        return _verifyWhitelist(user, merkleProof);
+    function isWhitelisted(address user) external view returns (bool) {
+        return _verifyWhitelist(user);
     }
 
     /**
@@ -468,15 +405,6 @@ contract IDOPool is IPool, Pausable, ReentrancyGuard, AccessControl, Ownable2Ste
     }
 
     /**
-     * @notice Update whitelist merkle root
-     * @param newMerkleRoot New Merkle roor for whitelist
-     */
-    function updateWhitelist(bytes32 newMerkleRoot) external {
-        whitelistRoot = newMerkleRoot;
-        emit whitelistUpdated(newMerkleRoot, block.timestamp);
-    }
-
-    /**
      * @notice Emergency withdraw tokens (only unsold tokens)
      * @param token Token address to withdraw
      * @param to Address to send to
@@ -546,12 +474,10 @@ contract IDOPool is IPool, Pausable, ReentrancyGuard, AccessControl, Ownable2Ste
     /**
      * @notice Verify Merkle proof for whitelist
      * @param user Address to verify
-     * @param merkleProof  Proof Array
      * @return True if proof is valid
      */
-    function _verifyWhitelist(address user, bytes32[] calldata merkleProof) internal view returns (bool) {
-        bytes32 leaf = keccak256(abi.encodePacked(user));
-        return MerkleProof.verify(merkleProof, whitelistRoot, leaf);
+    function _verifyWhitelist(address user) internal view returns (bool) {
+        // CHeck is user is in whitelist array
     }
 
     /**
@@ -679,17 +605,15 @@ contract IDOPool is IPool, Pausable, ReentrancyGuard, AccessControl, Ownable2Ste
     /**
      * @dev Internal function to set vesting config
      */
-    function _initializeVesting(DataTypes.VestingConfig calldata config, bytes32 _whitelistRoot) private {
+    function _initializeVesting(DataTypes.VestingConfig calldata config) private {
         vestingConfig = config;
-        whitelistRoot = _whitelistRoot;
     }
 
     /**
      * @notice validate pool and amount
      * @param amount payment token amount
-     * @param merkleProof merkle Proof
      */
-    function _canParticipate(uint256 amount, bytes32[] calldata merkleProof) private view {
+    function _canParticipate(uint256 amount) private view {
         // timestamp checks
         require(block.timestamp >= poolInfo.startTime, "IDOPool: Sales not started");
         require(block.timestamp < poolInfo.endTime, "IDOPool: Sales ended");
@@ -702,7 +626,7 @@ contract IDOPool is IPool, Pausable, ReentrancyGuard, AccessControl, Ownable2Ste
 
         // White list checks
         if (whitelistEnabled) {
-            require(_verifyWhitelist(_msgSender(), merkleProof), "IDOPool: Not whitelisted");
+            require(_verifyWhitelist(_msgSender()), "IDOPool: Not whitelisted");
         }
 
         // contribution checks

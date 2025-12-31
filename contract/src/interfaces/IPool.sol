@@ -36,7 +36,6 @@ interface IPool {
      * @dev Can only be called once, by factory
      * @param _poolConfig Pool configuration struct
      * @param _vestingConfig Vesting configuration struct
-     * @param _whitelistRoot Merkle root for whitelist
      * @param _whitelistEnabled tag to check whitelist
      * @param _creator Pool creator address
      * @param _feeCollector Fee collector address
@@ -46,7 +45,6 @@ interface IPool {
     function initialize(
         DataTypes.PoolConfig calldata _poolConfig,
         DataTypes.VestingConfig calldata _vestingConfig,
-        bytes32 _whitelistRoot,
         bool _whitelistEnabled,
         address _creator,
         address _feeCollector,
@@ -57,15 +55,13 @@ interface IPool {
     /**
      * @notice Participate in the IDO sale
      * @param amount Amount of the payment token to contribute
-     * @param merkleProof Proof for whitelist verification (if enabled)
      */
-    function participate(uint256 amount, bytes32[] calldata merkleProof) external;
+    function participate(uint256 amount) external;
 
     /**
      * @notice Participate with native token (ETH/MATIC)
-     * @param merkleProof Proof for whitelise verification (if enabled)
      */
-    function participateWithNative(bytes32[] calldata merkleProof) external payable;
+    function participateWithNative() external payable;
 
     /**
      * @notice Claim allocated tokens after pool finalization
@@ -76,22 +72,6 @@ interface IPool {
      * @notice Claim refund if pool failed or was cancelled
      */
     function claimRefund() external;
-
-    /**
-     *
-     * @param user address of the user to check
-     * @return bool true if the user can and false if he can't
-     * @return reason
-     */
-    function canClaimTokens(address user) external view returns (bool, string memory);
-
-    /**
-     *
-     * @param user address of the user to check
-     * @return bool true if the user can and false if he can't
-     * @return reason
-     */
-    function canClaimRefund(address user) external view returns (bool, string memory);
 
     /**
      * @notice Get complete pool information
@@ -116,9 +96,8 @@ interface IPool {
     /**
      * @notice Check if user is whitelisted
      * @param user address to check
-     * @param merkleProof Merkle Proof for verification
      */
-    function isWhitelisted(address user, bytes32[] calldata merkleProof) external view returns (bool);
+    function isWhitelisted(address user) external view returns (bool);
 
     /**
      * @notice Get remaining allocation available
@@ -150,12 +129,6 @@ interface IPool {
      * @dev can only be called by the factory or creator
      */
     function cancel() external;
-
-    /**
-     * @notice Update whitelist merkle root
-     * @param newMerkleRoot New Merkle roor for whitelist
-     */
-    function updateWhitelist(bytes32 newMerkleRoot) external;
 
     /**
      * @notice Emergency withdraw tokens (only unsold tokens)
